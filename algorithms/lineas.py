@@ -45,6 +45,46 @@ class DDA:
         return f"DDA Line from ({self.x1}, {self.y1}) to ({self.x2}, {self.y2}) with {self.steps} steps."
     
 
+class Bresenham:
+    def __init__(self, x1: int, y1: int, x2: int, y2: int):
+        self.x1 = x1
+        self.y1 = y1
+        self.x2 = x2
+        self.y2 = y2
+
+    def generate_points(self) -> list:
+        points = []
+        dx = abs(self.x2 - self.x1)
+        dy = abs(self.y2 - self.y1)
+
+        sx = 1 if self.x1 < self.x2 else -1
+        sy = 1 if self.y1 < self.y2 else -1
+        
+        err = dx - dy
+
+        while True:
+            points.append((self.x1, self.y1))
+            if self.x1 == self.x2 and self.y1 == self.y2:
+                break
+            err2 = err * 2
+            if err2 > -dy:
+                err -= dy
+                self.x1 += sx
+            if err2 < dx:
+                err += dx
+                self.y1 += sy
+
+        return points
+    
+    def print_points(self) -> None:
+        points = self.generate_points()
+        for point in points:
+            print(point)
+
+    def __str__(self) -> str:
+        return f"Bresenham Line from ({self.x1}, {self.y1}) to ({self.x2}, {self.y2})."
+    
+
 if __name__ == "__main__":
     dda = DDA(3, 5, 17, 23)
     print(dda)
