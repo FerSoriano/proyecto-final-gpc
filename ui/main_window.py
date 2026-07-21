@@ -7,7 +7,7 @@ class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Proyecto Graficación - Paint")
-        self.geometry("1400x650")
+        self.geometry("1450x650")
         self.resizable(False, False)
 
         self._create_layout()
@@ -19,9 +19,21 @@ class MainWindow(tk.Tk):
         top_frame = ttk.Frame(self, padding="5")
         top_frame.pack(side=tk.TOP, fill=tk.X)
 
-        ttk.Label(top_frame, text="Color de trazo:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(5, 10))
+        # Panel para seleccionar el modo de entrada
+        mode_frame = ttk.Frame(top_frame)
+        mode_frame.pack(side=tk.LEFT, padx=(0, 20))
 
-        # self.colores = ["black", "blue", "pink", "green", "purple"]
+        ttk.Label(mode_frame, text="Entrada:", font=("Arial", 15, "bold")).pack(side=tk.LEFT, padx=(5, 5))
+
+        self.btn_coords = ttk.Button(mode_frame, text="Coordenadas")
+        self.btn_coords.pack(side=tk.LEFT, padx=2)
+
+        # Separador visual vertical
+        ttk.Separator(top_frame, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=10)
+
+        # Panel para seleccionar el color de trazo
+        ttk.Label(top_frame, text="Color de trazo:", font=("Arial", 15, "bold")).pack(side=tk.LEFT, padx=(5, 10))
+
         self.colores = {
             "negro": "black", 
             "azul": "blue", 
@@ -48,18 +60,47 @@ class MainWindow(tk.Tk):
         tools_frame = ttk.Frame(self, padding="10")
         tools_frame.pack(side=tk.LEFT, fill=tk.Y)
 
-        ttk.Label(tools_frame, text="Primitivas", font=("Arial", 12, "bold")).pack(pady=(0, 10))
+        # -- Lineas --
+        ttk.Label(tools_frame, text="Lineas", font=("Arial", 20, "bold")).pack(pady=(0, 10))
         
-        self.btn_dda = ttk.Button(tools_frame, text="Línea DDA")
+        self.btn_dda = ttk.Button(tools_frame, text="Línea DDA", width=16)
         self.btn_dda.pack(fill=tk.X, pady=2)
         
-        self.btn_bresenham = ttk.Button(tools_frame, text="Línea Bresenham")
+        self.btn_bresenham = ttk.Button(tools_frame, text="Línea Bresenham", width=16)
         self.btn_bresenham.pack(fill=tk.X, pady=2)
-
+        
+        # -- Circulos --
         ttk.Separator(tools_frame, orient='horizontal').pack(fill=tk.X, pady=15)
 
-        self.btn_clear = ttk.Button(tools_frame, text="Limpiar Pantalla")
+        ttk.Label(tools_frame, text="Círculos", font=("Arial", 20, "bold")).pack(pady=(0, 10))
+
+        self.btn_dda_circle = ttk.Button(tools_frame, text="Círculo DDA", width=16)
+        self.btn_dda_circle.pack(fill=tk.X, pady=2)
+        self.btn_pm_circle = ttk.Button(tools_frame, text="Círculo PM", width=16)
+        self.btn_pm_circle.pack(fill=tk.X, pady=2)
+
+        # -- Elipse --
+        ttk.Separator(tools_frame, orient='horizontal').pack(fill=tk.X, pady=15)
+        ttk.Label(tools_frame, text="Elipses", font=("Arial", 20, "bold")).pack(pady=(0, 10))
+        self.btn_pm_ellipse = ttk.Button(tools_frame, text="Elipse PM", width=16)
+        self.btn_pm_ellipse.pack(fill=tk.X, pady=2)
+
+
+        # ==========================================
+        # Botones de acción: Limpiar y Salir
+        # ==========================================
+        ttk.Separator(tools_frame, orient='horizontal').pack(fill=tk.X, pady=15)
+
+        # Botón estilo Bootstrap Primary (Azul) para Limpiar
+        self.btn_clear = tk.Label(tools_frame, text="Limpiar Pantalla", bg="#0d6efd", fg="white", 
+                                  font=("Arial", 13, "bold"), pady=8, cursor="hand2")
         self.btn_clear.pack(fill=tk.X, pady=2)
+
+        # Botón estilo Bootstrap Danger (Rojo) para Salir
+        self.btn_exit = tk.Label(tools_frame, text="Salir", bg="#dc3545", fg="white", 
+                                 font=("Arial", 13, "bold"), pady=8, cursor="hand2")
+        self.btn_exit.pack(fill=tk.X, pady=(20, 2))
+        
 
         # ==========================================
         # PANEL CENTRAL: Lienzo de Dibujo
@@ -76,10 +117,18 @@ class MainWindow(tk.Tk):
         log_frame = ttk.Frame(self, padding="10")
         log_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
-        ttk.Label(log_frame, text="Cálculos de Coordenadas", font=("Arial", 12, "bold")).pack(pady=(0, 10))
+        # Sub-contenedor para alinear el título y el botón de opciones
+        log_header = ttk.Frame(log_frame)
+        log_header.pack(fill=tk.X, pady=(0, 10))
         
-        self.log_text = scrolledtext.ScrolledText(log_frame, width=45, height=35, state='disabled')
+        ttk.Label(log_header, text="Cálculos de Coordenadas", font=("Arial", 12, "bold")).pack(side=tk.LEFT)
+        
+        self.btn_options = ttk.Button(log_header, text="⚙️ Opciones")
+        self.btn_options.pack(side=tk.RIGHT)
+        
+        self.log_text = scrolledtext.ScrolledText(log_frame, width=45, height=35, state='disabled', font=("Arial", 12))
         self.log_text.pack(fill=tk.BOTH, expand=True)
+
 
     def log_calculation(self, text):
         self.log_text.config(state='normal')
