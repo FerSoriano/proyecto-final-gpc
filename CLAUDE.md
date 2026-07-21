@@ -1,0 +1,43 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+A Tkinter desktop "Paint" app built for a Computer Graphics (GPC) university course. Its entire purpose is educational: **no native Tkinter drawing functions are used for the primitives themselves** — every line/circle/ellipse/parabola pixel is computed by a pure-Python algorithm class (DDA, Bresenham, Punto Medio) and then plotted one pixel at a time onto the canvas.
+
+## Commands
+
+- Run the app: `python3 main.py`
+- No third-party dependencies — stdlib + Tkinter only (no `requirements.txt`/`pyproject.toml`, no venv needed beyond a standard Python 3 install with Tk support).
+- No test suite, linter, or formatter is configured in this repo. Verify changes by running the app and exercising the feature manually through the GUI (this is a GUI-driven app with no automated tests).
+- Each module in `algorithms/` has an `if __name__ == "__main__":` demo block that prints computed points to stdout — useful for sanity-checking an algorithm in isolation without launching the GUI, e.g. `python3 -m algorithms.elipse` or `python3 algorithms/circunferencias.py`.
+
+## Architecture
+
+Simplified MVC, split across three packages:
+
+- `algorithms/` — pure computation, zero Tkinter imports. Each class takes geometric parameters in its constructor and exposes a `generate_points()`/`generate_initial_points()` method returning plain `(x, y)` integer tuples. `Circle` (in `circunferencias.py`) and `ElipsePM` (in `elipse.py`) additionally expose `generate_octant_points()` / `generate_quadrant_points()`, which take the first-octant/quadrant points and mirror them by symmetry into a dict keyed `octant_1..8` / `quadrant_1..4`. These classes are never touched by Tkinter — they're plotted by the controller.
+- `ui/main_window.py` — the view (`MainWindow(tk.Tk)`). All layout is built procedurally in one method, `_create_layout()`. It has no logic of its own: every widget it creates is exposed as a public attribute (`self.btn_dda`, `self.color_squares`, `self.canvas_manager`, `self.log_text`, etc.) so the controller can wire up commands/bindings after construction.
+- `ui/canvas_manager.py` — thin renderer around the `tk.Canvas`. `draw_pixel(x, y, color, size)` is the one primitive everything funnels through (a Tkinter rectangle simulating a pixel — this is the only "native" drawing call in the app, used purely as the pixel-plotting unit, not as a shape primitive). `redraw(strokes, grid_enabled, dark_mode)` clears the canvas and repaints in layer order: background color → grid lines → every stroke in the history. `CanvasManager` holds no drawing history itself — it's a stateless renderer driven by data the controller passes in.
+- `controllers/app_controller.py` — all business logic and event wiring lives here (`AppController`). Key things to know before touching it:
+  - **Tool/mode selection uses string keys**, not an enum: `self.current_mode` is one of the literal strings used as keys in `self.tool_buttons` (e.g. `"LINEA DDA"`, `"CIRCULO PM"`, `"ELIPSE PM"`). Adding a new primitive means adding a new string mode, not a new type.
+  - **Two input paths**: mouse clicks (`on_canvas_click`) drive lines via two sequential clicks (start point, then end point). Circles/ellipses (and any primitive needing more than 2 raw coordinates) are *not* mouse-driven — clicking the canvas while one of those modes is active just tells the user to use the "Coordenadas" button, which opens a modal (`open_coordinates_popup`) with fields built dynamically based on `self.current_mode`.
+  - **Stroke history**: `self.strokes` is a list of dicts (`{"tool", "points", "color", "thickness"}`) appended to whenever a shape finishes drawing (see `_record_stroke`); `self.redo_stack` holds undone strokes. This is what `canvas_manager.redraw()` replays, and it's the backing data for undo/redo, CSV export, and any grid/dark-mode toggle (which must call `redraw()` to reapply strokes on top of the new background).
+  - **Widget wiring pattern**: the controller's `__init__` reaches into `self.view.<widget_name>` to call `.config(command=...)` or `.bind("<Button-1>", ...)`. New widgets should be defined in `MainWindow._create_layout`, exposed as `self.<name>`, and wired here — never build widgets inside the controller.
+  - **Two visual idioms for buttons**: `ttk.Button` is used for tool-selection and modal-opening actions (line/circle/ellipse buttons, "Coordenadas", "⚙️ Opciones"); plain `tk.Label` with a `<Button-1>` bind and inline hex colors (mimicking Bootstrap primary/danger buttons) is used for destructive/state actions like "Limpiar Pantalla" and "Salir". Follow the existing idiom for the kind of action you're adding rather than mixing them.
+  - The log panel (`self.view.log_text`, a `ScrolledText`) doubles as a place to inject live widgets — `_draw_circle_and_ellipse_detail` uses `log_text.window_create()` to embed a `ttk.Button` inline in the log that opens a detail window (`show_points_details`) listing all mirrored points.
+
+## Current status & roadmap
+
+The app is mid-implementation of 7 planned features, being built in dependency order (not the order they were originally requested — see rationale below). Full design detail lives in the plan file `~/.claude/plans/tengo-una-lista-de-logical-eclipse.md`; this section is the quick-reference checklist of what's done vs. pending.
+
+**Why this order**: none of Undo/Redo, Grid, Dark Mode, CSV Export, or Animation could be built in isolation, because the app had no persistent record of what had been drawn (`draw_pixel` painted directly onto the canvas and forgot the point immediately). Fase 0 introduces that record (`self.strokes` + `CanvasManager.redraw()`) and everything else builds on top of it. Undo/Redo was also moved ahead of Animation, because Animation needs to add "don't redraw mid-animation" guards into code that Undo/Redo and the Grid/Dark-Mode toggles create — so those need to exist first.
+
+- [x] **Fase 0 — Fundación (historial de trazos + `redraw()`)** — done. `CanvasManager.draw_pixel` takes a `size` param, `draw_grid()` and `redraw()` exist. `AppController` has `self.strokes`, `self.redo_stack`, `self.grid_enabled`, `self.dark_mode`, `self.current_thickness`, and a `_record_stroke()` helper that `draw_lines` / `_draw_circle_and_ellipse_detail` call after painting. `clear_canvas()` now resets both stacks and goes through `redraw()`.
+- [ ] **Fase 1 — Algoritmo de Parábola** — not started. New `algorithms/parabola.py` (`ParabolaPM`), parametrized as vertex `(Vx, Vy)` + end point `(Ex, Ey)` (same field pattern as the line tool), midpoint algorithm with 2 regions like `ElipsePM`. Needs a new `btn_pm_parabola` in `main_window.py`, a new `"PARABOLA PM"` mode wired the same way as circle/ellipse (Coordenadas-popup only, not mouse-driven), and generalizing `_draw_circle_and_ellipse_detail`/`show_points_details` from a circle/ellipse ternary to a 3-way dict that also covers `"parabola"`.
+- [ ] **Fase 2 — Exportación de Coordenadas (CSV)** — not started. `export_to_csv()` in the controller, reading only from `self.strokes` (already populated by Fase 0); one row per point: `trazo_id, herramienta, x, y, color, grosor`. New `ttk.Button` next to "Coordenadas".
+- [ ] **Fase 3 — Grosor de Trazo** — not started. `draw_pixel`'s `size` param and `self.current_thickness` already exist from Fase 0; still need the Spinbox widget in the top bar and wiring it to update `self.current_thickness` (applies only to new strokes, not retroactively).
+- [ ] **Fase 4 — Deshacer / Rehacer** — not started. `undo_last_stroke()` / `redo_last_stroke()` popping between `self.strokes` and `self.redo_stack`, each followed by `canvas_manager.redraw(...)`. UI: `btn_undo`/`btn_redo` as gray Bootstrap-style `tk.Label`s, matching the `btn_clear`/`btn_exit` idiom.
+- [ ] **Fase 5 — Cuadrícula de Fondo + Modo Oscuro del Lienzo** — not started. Both are toggles added as `Checkbutton`s inside the existing `open_options_popup` modal, both just flip `self.grid_enabled`/`self.dark_mode` and call `redraw()`. Dark mode only changes canvas `bg` and grid line color — the rest of the app's UI stays unaffected.
+- [ ] **Fase 6 — Animación de Trazado (renderizado progresivo)** — not started, deliberately last. Adds `self.animation_enabled`/`self.is_animating` and reworks the 4 `draw_*` methods to paint one point at a time via `self.view.after(...)` when enabled, plus guards in `undo_last_stroke`, `redo_last_stroke`, `clear_canvas`, and the grid/dark-mode toggle so they can't call `redraw()` out from under an in-progress animation.
