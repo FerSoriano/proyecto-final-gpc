@@ -85,6 +85,12 @@ class MainWindow(tk.Tk):
         self.btn_pm_ellipse = ttk.Button(tools_frame, text="Elipse PM", width=16)
         self.btn_pm_ellipse.pack(fill=tk.X, pady=2)
 
+        # -- Parábola --
+        ttk.Separator(tools_frame, orient='horizontal').pack(fill=tk.X, pady=15)
+        ttk.Label(tools_frame, text="Parábolas", font=("Arial", 20, "bold")).pack(pady=(0, 10))
+        self.btn_pm_parabola = ttk.Button(tools_frame, text="Parábola PM", width=16)
+        self.btn_pm_parabola.pack(fill=tk.X, pady=2)
+
 
         # ==========================================
         # Botones de acción: Limpiar y Salir

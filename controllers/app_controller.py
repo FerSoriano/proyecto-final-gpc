@@ -1,8 +1,10 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+
 from algorithms.lineas import DDA, Bresenham
 from algorithms.circunferencias import DDA as DDA_Circle, PuntoMedio
 from algorithms.elipse import ElipsePM
+from algorithms.parabola import ParabolaPM
 
 class AppController:
     def __init__(self, view):
@@ -10,12 +12,19 @@ class AppController:
         self.canvas_manager = self.view.canvas_manager
         
         # Estado de la aplicación
-        self.current_mode = None  
+        self.current_mode = None
         self.start_x = None
         self.start_y = None
         self.current_color = self.view.colores["negro"]  # Color por defecto
         self.input_mode = "Mouse"  # Modo de entrada por defecto
         self.log_font_size = 12  # Tamaño inicial por defecto
+
+        # Historial de trazos (habilita deshacer/rehacer, export, grid y modo oscuro)
+        self.strokes = []
+        self.redo_stack = []
+        self.grid_enabled = False
+        self.dark_mode = False
+        self.current_thickness = 1
         
         # Conectar botón de opciones
         self.view.btn_options.config(command=self.open_options_popup)
@@ -30,7 +39,8 @@ class AppController:
             "LINEA BRESENHAM": self.view.btn_bresenham,
             "CIRCULO DDA": self.view.btn_dda_circle,
             "CIRCULO PM": self.view.btn_pm_circle,
-            "ELIPSE PM": self.view.btn_pm_ellipse
+            "ELIPSE PM": self.view.btn_pm_ellipse,
+            "PARABOLA PM": self.view.btn_pm_parabola
         }
 
         # Aplicar el estilo por defecto a todos al iniciar
@@ -44,6 +54,7 @@ class AppController:
         self.view.btn_dda_circle.config(command=lambda: self.set_mode("CIRCULO DDA"))
         self.view.btn_pm_circle.config(command=lambda: self.set_mode("CIRCULO PM"))
         self.view.btn_pm_ellipse.config(command=lambda: self.set_mode("ELIPSE PM"))
+        self.view.btn_pm_parabola.config(command=lambda: self.set_mode("PARABOLA PM"))
 
         self.view.btn_clear.bind("<Button-1>", lambda event: self.clear_canvas())
         self.view.btn_exit.bind("<Button-1>", lambda event: self.confirm_exit())
@@ -81,7 +92,7 @@ class AppController:
         popup.grab_set()  # Bloquea la ventana principal hasta que se cierre el pop-up
 
         # Preparar los campos según la primitiva seleccionada
-        if self.current_mode in ["LINEA DDA", "LINEA BRESENHAM"]:
+        if self.current_mode in ["LINEA DDA", "LINEA BRESENHAM", "PARABOLA PM"]:
             campos = ["X Inicial", "Y Inicial", "X Final", "Y Final"]
         elif self.current_mode in ["CIRCULO DDA", "CIRCULO PM"]:
             campos = ["Radio", "X Central", "Y Central"]
@@ -103,26 +114,32 @@ class AppController:
                 valores = {campo: int(entry.get()) for campo, entry in entradas.items()}
                 popup.destroy()
                 
-                # Por ahora, como solo hay líneas, mapeamos directamente
                 if self.current_mode in ["LINEA DDA", "LINEA BRESENHAM"]:
                     self.draw_lines(
-                        valores["X Inicial"], 
-                        valores["Y Inicial"], 
-                        valores["X Final"], 
+                        valores["X Inicial"],
+                        valores["Y Inicial"],
+                        valores["X Final"],
                         valores["Y Final"]
                     )
                 elif self.current_mode in ["CIRCULO DDA", "CIRCULO PM"]:
                     self.draw_circle(
                         radius = valores["Radio"],
-                        x_center = valores["X Central"],   
+                        x_center = valores["X Central"],
                         y_center = valores["Y Central"]
                     )
                 elif self.current_mode in ["ELIPSE PM"]:
                     self.draw_ellipse(
                         radius_x = valores["Radio X"],
                         radius_y = valores["Radio Y"],
-                        x_center = valores["X Central"],   
+                        x_center = valores["X Central"],
                         y_center = valores["Y Central"]
+                    )
+                elif self.current_mode in ["PARABOLA PM"]:
+                    self.draw_parabola(
+                        valores["X Inicial"],
+                        valores["Y Inicial"],
+                        valores["X Final"],
+                        valores["Y Final"]
                     )
 
             except ValueError:
@@ -184,11 +201,23 @@ class AppController:
             self.tool_buttons[mode].config(style="Active.TButton")
 
     def clear_canvas(self):
-        self.canvas_manager.clear_canvas()
+        self.strokes = []
+        self.redo_stack = []
+        self.canvas_manager.redraw(self.strokes, self.grid_enabled, self.dark_mode)
         self.view.clear_log()
         self.view.log_calculation("🧹 Pantalla y registro limpios")
         self.start_x = None
         self.start_y = None
+
+    def _record_stroke(self, points):
+        """Guarda un trazo recién dibujado en el historial (habilita deshacer/rehacer, export, etc.)."""
+        self.strokes.append({
+            "tool": self.current_mode,
+            "points": points,
+            "color": self.current_color,
+            "thickness": self.current_thickness,
+        })
+        self.redo_stack.clear()
 
     def on_canvas_click(self, event):
         if not self.current_mode:
@@ -207,13 +236,16 @@ class AppController:
             end_x = event.x
             end_y = event.y
             self.view.log_calculation(f"Punto final (x2, y2): ({end_x}, {end_y})")
-            
-            self.draw_lines(self.start_x, self.start_y, end_x, end_y)
-            
+
+            if self.current_mode == "PARABOLA PM":
+                self.draw_parabola(self.start_x, self.start_y, end_x, end_y)
+            else:
+                self.draw_lines(self.start_x, self.start_y, end_x, end_y)
+
             self.start_x = None
             self.start_y = None
 
-    def draw_lines(self, x1, y1, x2, y2):
+    def draw_lines(self, x1: int, y1: int, x2: int, y2: int):
         points = []
         
         if self.current_mode == "LINEA DDA":
@@ -224,15 +256,17 @@ class AppController:
             points = alg.generate_points()
 
         self.view.log_calculation(f"\n⌛️ Calculando {self.current_mode}...\n")
-        
+
         for p in points:
-            # Ahora le pasamos el color actual al método que pinta el pixel
-            self.canvas_manager.draw_pixel(p[0], p[1], color=self.current_color)
+            # Ahora le pasamos el color y grosor actuales al método que pinta el pixel
+            self.canvas_manager.draw_pixel(p[0], p[1], color=self.current_color, size=self.current_thickness)
             self.view.log_calculation(f"X: {p[0]}, Y: {p[1]}")
-        
+
+        self._record_stroke(points)
+
         self.view.log_calculation("\n✅ Trazo finalizado\n")
 
-    def draw_circle(self, x_center, y_center, radius):
+    def draw_circle(self, x_center: int, y_center: int, radius: int):
         points_dict = {}
 
         if self.current_mode == "CIRCULO DDA":
@@ -255,6 +289,7 @@ class AppController:
 
         self._draw_circle_and_ellipse_detail("circle", points_dict)
 
+
     def draw_ellipse(self, radius_x: int, radius_y: int, x_center: int, y_center: int):
         pm_elipse = ElipsePM(
             radius_x=radius_x,
@@ -267,23 +302,45 @@ class AppController:
 
         self._draw_circle_and_ellipse_detail("ellipse", points_dict)
 
-    
+    def draw_parabola(self, x1: int, y1: int, x2: int, y2: int):
+        try:
+            pm_parabola = ParabolaPM(x1=x1, y1=y1, x2=x2, y2=y2)
+        except ValueError as e:
+            self.view.log_calculation(f"❌ ERROR: {e}")
+            return
+
+        points_dict = pm_parabola.generate_points()
+        pm_parabola.print_points()
+
+        self._draw_circle_and_ellipse_detail("parabola", points_dict)
+
+    # Info compartida por circle/ellipse/parabola para las etiquetas de detalle
+    PRIMITIVE_INFO = {
+        "circle": {"title": "Círculo", "group_plural": "octantes", "group_header": "OCTANTE"},
+        "ellipse": {"title": "Elipse", "group_plural": "cuadrantes", "group_header": "CUADRANTE"},
+        "parabola": {"title": "Parábola", "group_plural": "ramas", "group_header": "RAMA"},
+    }
+
     def _draw_circle_and_ellipse_detail(self, primitive_name: str, points_dict: dict) -> None:
 
-        quadrants_octants = "octantes" if primitive_name == "circle" else "cuadrantes"
+        group_plural = self.PRIMITIVE_INFO[primitive_name]["group_plural"]
 
         self.view.log_calculation(f"\n⌛️ Calculando {self.current_mode}...")
 
+        flat_points = []
         for _, points in points_dict.items():
             for p in points:
-                self.canvas_manager.draw_pixel(p[0], p[1], color=self.current_color)
+                self.canvas_manager.draw_pixel(p[0], p[1], color=self.current_color, size=self.current_thickness)
+                flat_points.append(p)
+
+        self._record_stroke(flat_points)
 
         self.view.log_calculation("\n✅ Trazo finalizado\n")
 
         # Crear e inyectar el botón dinámico en la caja de texto
         self.view.log_text.config(state='normal')
-        
-        btn_detalle = ttk.Button(self.view.log_text, text=f"Mostrar detalle de {quadrants_octants}", 
+
+        btn_detalle = ttk.Button(self.view.log_text, text=f"Mostrar detalle de {group_plural}",
                                     command=lambda: self.show_points_details(primitive_name ,points_dict))
         
         # Insertar el widget dentro del log
@@ -303,7 +360,7 @@ class AppController:
     def show_points_details(self, primitive_name: str, points_dict: dict) -> None:
         """Abre una ventana independiente con el desglose de los cuadrantes / octantes."""
         detalle_win = tk.Toplevel(self.view)
-        title = "Círculo" if primitive_name == "circle" else "Elipse"
+        title = self.PRIMITIVE_INFO[primitive_name]["title"]
         detalle_win.title(f"Detalle de Coordenadas - {title}")
         detalle_win.geometry("350x500")
         detalle_win.resizable(False, False)
@@ -313,7 +370,7 @@ class AppController:
         txt_detalles.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Poblar la ventana con los datos del diccionario
-        headers = "OCTANTE" if primitive_name == "circle" else "CUADRANTE"
+        headers = self.PRIMITIVE_INFO[primitive_name]["group_header"]
         for x, points in enumerate(points_dict.values(), start=1):
             txt_detalles.insert(tk.END, f"--- {headers}: {x} ---\n")
             for p in points:
