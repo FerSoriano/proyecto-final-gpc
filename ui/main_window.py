@@ -23,10 +23,26 @@ class MainWindow(tk.Tk):
         mode_frame = ttk.Frame(top_frame)
         mode_frame.pack(side=tk.LEFT, padx=(0, 20))
 
+        # Botones estilo Bootstrap Secondary (Gris) para Deshacer/Rehacer
+        self.btn_undo = tk.Label(mode_frame, text="↩️", bg="#6c757d", fg="white",
+                                 font=("Arial", 13, "bold"), padx=10, pady=4, cursor="hand2")
+        self.btn_undo.pack(side=tk.LEFT, padx=2)
+
+        self.btn_redo = tk.Label(mode_frame, text="↪️", bg="#6c757d", fg="white",
+                                 font=("Arial", 13, "bold"), padx=10, pady=4, cursor="hand2")
+        self.btn_redo.pack(side=tk.LEFT, padx=2)
+
+        ttk.Separator(mode_frame, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=10)
+
+        # Entrada Coordenadas
         ttk.Label(mode_frame, text="Entrada:", font=("Arial", 15, "bold")).pack(side=tk.LEFT, padx=(5, 5))
 
         self.btn_coords = ttk.Button(mode_frame, text="Coordenadas")
         self.btn_coords.pack(side=tk.LEFT, padx=2)
+
+        # Alineado al lado derecho de la barra superior
+        self.btn_export = ttk.Button(top_frame, text="Exportar CSV")
+        self.btn_export.pack(side=tk.RIGHT, padx=(2, 5))
 
         # Separador visual vertical
         ttk.Separator(top_frame, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=10)
@@ -50,6 +66,16 @@ class MainWindow(tk.Tk):
             square = tk.Label(top_frame, bg=color_value, width=4, height=1, relief="ridge", borderwidth=2, cursor="hand2")
             square.pack(side=tk.LEFT, padx=4)
             self.color_squares[color_name] = square
+
+        # Separador visual vertical
+        ttk.Separator(top_frame, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=10)
+
+        # Panel para seleccionar el grosor de trazo
+        ttk.Label(top_frame, text="Grosor:", font=("Arial", 15, "bold")).pack(side=tk.LEFT, padx=(5, 5))
+
+        self.thickness_var = tk.IntVar(value=1)
+        self.spinbox_thickness = ttk.Spinbox(top_frame, from_=1, to=10, textvariable=self.thickness_var, width=4)
+        self.spinbox_thickness.pack(side=tk.LEFT, padx=(0, 10))
 
         # Una línea separadora entre el menú superior y el resto de la interfaz
         ttk.Separator(self, orient='horizontal').pack(fill=tk.X, pady=(0, 5))
@@ -84,6 +110,12 @@ class MainWindow(tk.Tk):
         ttk.Label(tools_frame, text="Elipses", font=("Arial", 20, "bold")).pack(pady=(0, 10))
         self.btn_pm_ellipse = ttk.Button(tools_frame, text="Elipse PM", width=16)
         self.btn_pm_ellipse.pack(fill=tk.X, pady=2)
+
+        # -- Parábola --
+        ttk.Separator(tools_frame, orient='horizontal').pack(fill=tk.X, pady=15)
+        ttk.Label(tools_frame, text="Parábolas", font=("Arial", 20, "bold")).pack(pady=(0, 10))
+        self.btn_pm_parabola = ttk.Button(tools_frame, text="Parábola PM", width=16)
+        self.btn_pm_parabola.pack(fill=tk.X, pady=2)
 
 
         # ==========================================

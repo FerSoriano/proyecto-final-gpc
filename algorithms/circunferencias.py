@@ -35,7 +35,7 @@ class Circle:
         return f"Circle | Coords: ({self.x}, {self.y}), Ratio: ({self.r})."
 
 
-class DDA(Circle):
+class CircleDDA(Circle):
     def __init__(self, x: int, y: int, r: int):
         super().__init__(x, y, r)
 
