@@ -23,6 +23,18 @@ class MainWindow(tk.Tk):
         mode_frame = ttk.Frame(top_frame)
         mode_frame.pack(side=tk.LEFT, padx=(0, 20))
 
+        # Botones estilo Bootstrap Secondary (Gris) para Deshacer/Rehacer
+        self.btn_undo = tk.Label(mode_frame, text="↩️", bg="#6c757d", fg="white",
+                                 font=("Arial", 13, "bold"), padx=10, pady=4, cursor="hand2")
+        self.btn_undo.pack(side=tk.LEFT, padx=2)
+
+        self.btn_redo = tk.Label(mode_frame, text="↪️", bg="#6c757d", fg="white",
+                                 font=("Arial", 13, "bold"), padx=10, pady=4, cursor="hand2")
+        self.btn_redo.pack(side=tk.LEFT, padx=2)
+
+        ttk.Separator(mode_frame, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=10)
+
+        # Entrada Coordenadas
         ttk.Label(mode_frame, text="Entrada:", font=("Arial", 15, "bold")).pack(side=tk.LEFT, padx=(5, 5))
 
         self.btn_coords = ttk.Button(mode_frame, text="Coordenadas")

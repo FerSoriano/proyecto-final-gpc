@@ -67,6 +67,8 @@ class AppController:
 
         self.view.btn_clear.bind("<Button-1>", lambda event: self.clear_canvas())
         self.view.btn_exit.bind("<Button-1>", lambda event: self.confirm_exit())
+        self.view.btn_undo.bind("<Button-1>", lambda event: self.undo_last_stroke())
+        self.view.btn_redo.bind("<Button-1>", lambda event: self.redo_last_stroke())
 
         self.view.btn_coords.config(command=self.open_coordinates_popup)
         self.view.btn_export.config(command=self.export_to_csv)
@@ -252,6 +254,28 @@ class AppController:
         self.view.log_calculation("🧹 Pantalla y registro limpios")
         self.start_x = None
         self.start_y = None
+
+    def undo_last_stroke(self):
+        """Deshace el último trazo dibujado, moviéndolo a la pila de rehacer."""
+        if not self.strokes:
+            self.view.log_calculation("⚠️ No hay trazos para deshacer.")
+            return
+
+        stroke = self.strokes.pop()
+        self.redo_stack.append(stroke)
+        self.canvas_manager.redraw(self.strokes, self.grid_enabled, self.dark_mode)
+        self.view.log_calculation(f"↩️ Deshecho: {stroke['tool']}")
+
+    def redo_last_stroke(self):
+        """Rehace el último trazo deshecho, devolviéndolo al historial."""
+        if not self.redo_stack:
+            self.view.log_calculation("⚠️ No hay trazos para rehacer.")
+            return
+
+        stroke = self.redo_stack.pop()
+        self.strokes.append(stroke)
+        self.canvas_manager.redraw(self.strokes, self.grid_enabled, self.dark_mode)
+        self.view.log_calculation(f"↪️ Rehecho: {stroke['tool']}")
 
     def export_to_csv(self):
         """Exporta el historial de trazos a un archivo CSV elegido por el usuario."""
