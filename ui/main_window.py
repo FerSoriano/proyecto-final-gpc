@@ -28,6 +28,10 @@ class MainWindow(tk.Tk):
         self.btn_coords = ttk.Button(mode_frame, text="Coordenadas")
         self.btn_coords.pack(side=tk.LEFT, padx=2)
 
+        # Alineado al lado derecho de la barra superior
+        self.btn_export = ttk.Button(top_frame, text="Exportar CSV")
+        self.btn_export.pack(side=tk.RIGHT, padx=(2, 5))
+
         # Separador visual vertical
         ttk.Separator(top_frame, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=10)
 

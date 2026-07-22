@@ -1,10 +1,18 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
-from algorithms.lineas import DDA, Bresenham
-from algorithms.circunferencias import DDA as DDA_Circle, PuntoMedio
-from algorithms.elipse import ElipsePM
+from algorithms import (
+    DDA, # linea 
+    CircleDDA, 
+    PuntoMedio,
+    Bresenham, 
+    ElipsePM, 
+    ParabolaPM
+)
+
 from algorithms.parabola import ParabolaPM
+
+from utils.export_data import ExportData
 
 class AppController:
     def __init__(self, view):
@@ -13,6 +21,7 @@ class AppController:
         
         # Estado de la aplicación
         self.current_mode = None
+        self.current_primitive = None
         self.start_x = None
         self.start_y = None
         self.current_color = self.view.colores["negro"]  # Color por defecto
@@ -60,6 +69,7 @@ class AppController:
         self.view.btn_exit.bind("<Button-1>", lambda event: self.confirm_exit())
 
         self.view.btn_coords.config(command=self.open_coordinates_popup)
+        self.view.btn_export.config(command=self.export_to_csv)
 
         # 2. Conectar la selección de colores del menú superior
         for color_name, square_widget in self.view.color_squares.items():
@@ -69,6 +79,14 @@ class AppController:
         # 3. Conectar el lienzo
         self.canvas_manager.canvas.bind("<Button-1>", self.on_canvas_click)
 
+
+        # Info compartida por circle/ellipse/parabola para las etiquetas de detalle
+        self.PRIMITIVE_INFO = {
+            "line": {"title": "Linea", "group_plural": "NA", "group_header": "NA"},
+            "circle": {"title": "Círculo", "group_plural": "octantes", "group_header": "OCTANTE"},
+            "ellipse": {"title": "Elipse", "group_plural": "cuadrantes", "group_header": "CUADRANTE"},
+            "parabola": {"title": "Parábola", "group_plural": "ramas", "group_header": "RAMA"}
+        }
 
 
     def set_input_mode(self, mode):
@@ -200,6 +218,16 @@ class AppController:
         if mode in self.tool_buttons:
             self.tool_buttons[mode].config(style="Active.TButton")
 
+        # set current primitive
+        if self.current_mode in ["LINEA DDA", "LINEA BRESENHAM"]:
+            self.current_primitive = "line"
+        elif self.current_mode in ["CIRCULO DDA", "CIRCULO PM"]:
+            self.current_primitive = "circle"
+        elif self.current_mode in ["ELIPSE PM"]:
+            self.current_primitive = "ellipse"
+        elif self.current_mode in ["PARABOLA PM"]:
+            self.current_primitive = "parabola"
+
     def clear_canvas(self):
         self.strokes = []
         self.redo_stack = []
@@ -209,13 +237,36 @@ class AppController:
         self.start_x = None
         self.start_y = None
 
-    def _record_stroke(self, points):
-        """Guarda un trazo recién dibujado en el historial (habilita deshacer/rehacer, export, etc.)."""
+    def export_to_csv(self):
+        """Exporta el historial de trazos a un archivo CSV elegido por el usuario."""
+        if not self.strokes:
+            self.view.log_calculation("⚠️ No hay trazos para exportar.")
+            return
+
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("Archivos CSV", "*.csv")],
+            title="Exportar coordenadas a CSV"
+        )
+        if not filepath:
+            return
+
+        exporter = ExportData(self.strokes)
+        exporter.set_filename(filepath)
+        exporter.export_to_csv(["trazo_id", "herramienta", "x", "y", "color", "grosor", "grupo"])
+
+        self.view.log_calculation(f"📤 Exportado a: {filepath}")
+
+    def _record_stroke(self, points, groups=None):
+        """Guarda un trazo recién dibujado en el historial (habilita deshacer/rehacer, export, etc.).
+        `groups` es una lista paralela a `points` con la etiqueta de grupo de cada punto
+        (ej. "Octante 3", "Cuadrante 1", "Rama 2"); si no aplica (líneas), se llena con "N/A"."""
         self.strokes.append({
             "tool": self.current_mode,
             "points": points,
             "color": self.current_color,
             "thickness": self.current_thickness,
+            "groups": groups if groups is not None else ["N/A"] * len(points),
         })
         self.redo_stack.clear()
 
@@ -270,7 +321,7 @@ class AppController:
         points_dict = {}
 
         if self.current_mode == "CIRCULO DDA":
-            dda_circle = DDA_Circle(
+            dda_circle = CircleDDA(
                 x=x_center, y=y_center, r=radius
             )
             points_dict = dda_circle.generate_octant_points()
@@ -314,12 +365,6 @@ class AppController:
 
         self._draw_circle_and_ellipse_detail("parabola", points_dict)
 
-    # Info compartida por circle/ellipse/parabola para las etiquetas de detalle
-    PRIMITIVE_INFO = {
-        "circle": {"title": "Círculo", "group_plural": "octantes", "group_header": "OCTANTE"},
-        "ellipse": {"title": "Elipse", "group_plural": "cuadrantes", "group_header": "CUADRANTE"},
-        "parabola": {"title": "Parábola", "group_plural": "ramas", "group_header": "RAMA"},
-    }
 
     def _draw_circle_and_ellipse_detail(self, primitive_name: str, points_dict: dict) -> None:
 
