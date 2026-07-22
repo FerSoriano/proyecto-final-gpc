@@ -174,14 +174,14 @@ class AppController:
         """Abre un pop-up modal para configurar opciones generales de la interfaz."""
         popup = tk.Toplevel(self.view)
         popup.title("Opciones del Registro")
-        popup.geometry("280x150")
+        popup.geometry("300x230")
         popup.resizable(False, False)
         popup.transient(self.view)
         popup.grab_set()
 
         # Contenedor para el tamaño de letra
         frame = ttk.Frame(popup, padding=20)
-        frame.pack(fill=tk.BOTH, expand=True)
+        frame.pack(fill=tk.X)
 
         ttk.Label(frame, text="Tamaño de letra (Logs):", font=("Arial", 12)).pack(side=tk.LEFT, padx=(0, 10))
 
@@ -190,13 +190,37 @@ class AppController:
         spinbox = ttk.Spinbox(frame, from_=8, to_=24, textvariable=size_var, width=5)
         spinbox.pack(side=tk.LEFT)
 
+        ttk.Separator(popup, orient='horizontal').pack(fill=tk.X, padx=20)
+
+        # Contenedor para las opciones del lienzo (cuadrícula / modo oscuro)
+        canvas_frame = ttk.Frame(popup, padding=20)
+        canvas_frame.pack(fill=tk.X)
+
+        grid_var = tk.BooleanVar(value=self.grid_enabled)
+        dark_var = tk.BooleanVar(value=self.dark_mode)
+
+        def toggle_grid():
+            self.grid_enabled = grid_var.get()
+            self.canvas_manager.redraw(self.strokes, self.grid_enabled, self.dark_mode)
+            self.view.log_calculation(f"🔳 Cuadrícula {'activada' if self.grid_enabled else 'desactivada'}")
+
+        def toggle_dark_mode():
+            self.dark_mode = dark_var.get()
+            self.canvas_manager.redraw(self.strokes, self.grid_enabled, self.dark_mode)
+            self.view.log_calculation(f"{'🌙 Modo oscuro activado' if self.dark_mode else '☀️ Modo claro activado'}")
+
+        ttk.Checkbutton(canvas_frame, text="Mostrar cuadrícula", variable=grid_var,
+                        command=toggle_grid).pack(anchor=tk.W, pady=2)
+        ttk.Checkbutton(canvas_frame, text="Modo oscuro del lienzo", variable=dark_var,
+                        command=toggle_dark_mode).pack(anchor=tk.W, pady=2)
+
         def apply_changes():
             # Actualizamos la variable global
             self.log_font_size = size_var.get()
-            
+
             # Cambiamos dinámicamente la fuente del log principal
             self.view.log_text.config(font=("Arial", self.log_font_size))
-            
+
             self.view.log_calculation(f"⚙️ Tamaño de letra actualizado a: {self.log_font_size}")
             popup.destroy()
 
