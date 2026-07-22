@@ -55,6 +55,16 @@ class MainWindow(tk.Tk):
             square.pack(side=tk.LEFT, padx=4)
             self.color_squares[color_name] = square
 
+        # Separador visual vertical
+        ttk.Separator(top_frame, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=10)
+
+        # Panel para seleccionar el grosor de trazo
+        ttk.Label(top_frame, text="Grosor:", font=("Arial", 15, "bold")).pack(side=tk.LEFT, padx=(5, 5))
+
+        self.thickness_var = tk.IntVar(value=1)
+        self.spinbox_thickness = ttk.Spinbox(top_frame, from_=1, to=10, textvariable=self.thickness_var, width=4)
+        self.spinbox_thickness.pack(side=tk.LEFT, padx=(0, 10))
+
         # Una línea separadora entre el menú superior y el resto de la interfaz
         ttk.Separator(self, orient='horizontal').pack(fill=tk.X, pady=(0, 5))
 

@@ -71,6 +71,8 @@ class AppController:
         self.view.btn_coords.config(command=self.open_coordinates_popup)
         self.view.btn_export.config(command=self.export_to_csv)
 
+        self.view.thickness_var.trace_add("write", self._on_thickness_change)
+
         # 2. Conectar la selección de colores del menú superior
         for color_name, square_widget in self.view.color_squares.items():
             # c=color_name asegura que se pase el color correcto en la función lambda
@@ -203,6 +205,20 @@ class AppController:
         """Actualiza el color activo para los siguientes trazos."""
         self.current_color = self.view.colores[color]
         self.view.log_calculation(f"🎨 Color cambiado a: {color.capitalize()}")
+
+    def _on_thickness_change(self, *args):
+        """Sincroniza el grosor activo con el Spinbox del menú superior.
+        Solo afecta a los trazos nuevos, no a los ya dibujados."""
+        try:
+            value = self.view.thickness_var.get()
+        except tk.TclError:
+            return  # Campo vacío o valor no numérico mientras el usuario escribe
+
+        if value < 1:
+            return
+
+        self.current_thickness = value
+        self.view.log_calculation(f"🖌️ Grosor de trazo actualizado a: {value}")
 
     def set_mode(self, mode):
         self.current_mode = mode
@@ -369,16 +385,20 @@ class AppController:
     def _draw_circle_and_ellipse_detail(self, primitive_name: str, points_dict: dict) -> None:
 
         group_plural = self.PRIMITIVE_INFO[primitive_name]["group_plural"]
+        group_header = self.PRIMITIVE_INFO[primitive_name]["group_header"]
 
         self.view.log_calculation(f"\n⌛️ Calculando {self.current_mode}...")
 
         flat_points = []
-        for _, points in points_dict.items():
+        flat_groups = []
+        for group_num, (_, points) in enumerate(points_dict.items(), start=1):
+            group_label = f"{group_header.capitalize()} {group_num}"
             for p in points:
                 self.canvas_manager.draw_pixel(p[0], p[1], color=self.current_color, size=self.current_thickness)
                 flat_points.append(p)
+                flat_groups.append(group_label)
 
-        self._record_stroke(flat_points)
+        self._record_stroke(flat_points, flat_groups)
 
         self.view.log_calculation("\n✅ Trazo finalizado\n")
 
