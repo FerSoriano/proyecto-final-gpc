@@ -13,6 +13,7 @@ from algorithms import (
 from algorithms.parabola import ParabolaPM
 
 from utils.export_data import ExportData
+from utils.import_data import ImportData
 
 class AppController:
     def __init__(self, view):
@@ -34,7 +35,12 @@ class AppController:
         self.grid_enabled = False
         self.dark_mode = False
         self.current_thickness = 1
-        
+
+        # Animación de trazado
+        self.animation_enabled = False
+        self.animation_delay = 2  # ms entre puntos
+        self.is_animating = False
+
         # Conectar botón de opciones
         self.view.btn_options.config(command=self.open_options_popup)
 
@@ -72,6 +78,7 @@ class AppController:
 
         self.view.btn_coords.config(command=self.open_coordinates_popup)
         self.view.btn_export.config(command=self.export_to_csv)
+        self.view.btn_import.config(command=self.import_from_csv)
 
         self.view.thickness_var.trace_add("write", self._on_thickness_change)
 
@@ -174,14 +181,14 @@ class AppController:
         """Abre un pop-up modal para configurar opciones generales de la interfaz."""
         popup = tk.Toplevel(self.view)
         popup.title("Opciones del Registro")
-        popup.geometry("280x150")
+        popup.geometry("300x330")
         popup.resizable(False, False)
         popup.transient(self.view)
         popup.grab_set()
 
         # Contenedor para el tamaño de letra
         frame = ttk.Frame(popup, padding=20)
-        frame.pack(fill=tk.BOTH, expand=True)
+        frame.pack(fill=tk.X)
 
         ttk.Label(frame, text="Tamaño de letra (Logs):", font=("Arial", 12)).pack(side=tk.LEFT, padx=(0, 10))
 
@@ -190,13 +197,77 @@ class AppController:
         spinbox = ttk.Spinbox(frame, from_=8, to_=24, textvariable=size_var, width=5)
         spinbox.pack(side=tk.LEFT)
 
+        ttk.Separator(popup, orient='horizontal').pack(fill=tk.X, padx=20)
+
+        # Contenedor para las opciones del lienzo (cuadrícula / modo oscuro)
+        canvas_frame = ttk.Frame(popup, padding=20)
+        canvas_frame.pack(fill=tk.X)
+
+        grid_var = tk.BooleanVar(value=self.grid_enabled)
+        dark_var = tk.BooleanVar(value=self.dark_mode)
+
+        def toggle_grid():
+            if self.is_animating:
+                self.view.log_calculation("⚠️ Espera a que termine la animación actual.")
+                grid_var.set(self.grid_enabled)
+                return
+            self.grid_enabled = grid_var.get()
+            self.canvas_manager.redraw(self.strokes, self.grid_enabled, self.dark_mode)
+            self.view.log_calculation(f"🔳 Cuadrícula {'activada' if self.grid_enabled else 'desactivada'}")
+
+        def toggle_dark_mode():
+            if self.is_animating:
+                self.view.log_calculation("⚠️ Espera a que termine la animación actual.")
+                dark_var.set(self.dark_mode)
+                return
+            self.dark_mode = dark_var.get()
+            self.canvas_manager.redraw(self.strokes, self.grid_enabled, self.dark_mode)
+            self.view.log_calculation(f"{'🌙 Modo oscuro activado' if self.dark_mode else '☀️ Modo claro activado'}")
+
+        ttk.Checkbutton(canvas_frame, text="Mostrar cuadrícula", variable=grid_var,
+                        command=toggle_grid).pack(anchor=tk.W, pady=2)
+        ttk.Checkbutton(canvas_frame, text="Modo oscuro del lienzo", variable=dark_var,
+                        command=toggle_dark_mode).pack(anchor=tk.W, pady=2)
+
+        ttk.Separator(popup, orient='horizontal').pack(fill=tk.X, padx=20)
+
+        # Contenedor para las opciones de animación de trazado
+        anim_frame = ttk.Frame(popup, padding=20)
+        anim_frame.pack(fill=tk.X)
+
+        anim_var = tk.BooleanVar(value=self.animation_enabled)
+        delay_var = tk.IntVar(value=self.animation_delay)
+
+        def toggle_animation():
+            self.animation_enabled = anim_var.get()
+            self.view.log_calculation(f"🎬 Animación de trazado {'activada' if self.animation_enabled else 'desactivada'}")
+
+        def on_delay_change(*args):
+            try:
+                value = delay_var.get()
+            except tk.TclError:
+                return  # Campo vacío o valor no numérico mientras el usuario escribe
+            if value < 1:
+                return
+            self.animation_delay = value
+
+        ttk.Checkbutton(anim_frame, text="Animar trazado", variable=anim_var,
+                        command=toggle_animation).pack(anchor=tk.W, pady=2)
+
+        delay_row = ttk.Frame(anim_frame)
+        delay_row.pack(fill=tk.X, pady=(4, 0))
+        ttk.Label(delay_row, text="Velocidad (ms/punto):").pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Spinbox(delay_row, from_=1, to_=500, textvariable=delay_var, width=5).pack(side=tk.LEFT)
+
+        delay_var.trace_add("write", on_delay_change)
+
         def apply_changes():
             # Actualizamos la variable global
             self.log_font_size = size_var.get()
-            
+
             # Cambiamos dinámicamente la fuente del log principal
             self.view.log_text.config(font=("Arial", self.log_font_size))
-            
+
             self.view.log_calculation(f"⚙️ Tamaño de letra actualizado a: {self.log_font_size}")
             popup.destroy()
 
@@ -247,6 +318,10 @@ class AppController:
             self.current_primitive = "parabola"
 
     def clear_canvas(self):
+        if self.is_animating:
+            self.view.log_calculation("⚠️ Espera a que termine la animación actual.")
+            return
+
         self.strokes = []
         self.redo_stack = []
         self.canvas_manager.redraw(self.strokes, self.grid_enabled, self.dark_mode)
@@ -257,6 +332,10 @@ class AppController:
 
     def undo_last_stroke(self):
         """Deshace el último trazo dibujado, moviéndolo a la pila de rehacer."""
+        if self.is_animating:
+            self.view.log_calculation("⚠️ Espera a que termine la animación actual.")
+            return
+
         if not self.strokes:
             self.view.log_calculation("⚠️ No hay trazos para deshacer.")
             return
@@ -268,6 +347,10 @@ class AppController:
 
     def redo_last_stroke(self):
         """Rehace el último trazo deshecho, devolviéndolo al historial."""
+        if self.is_animating:
+            self.view.log_calculation("⚠️ Espera a que termine la animación actual.")
+            return
+
         if not self.redo_stack:
             self.view.log_calculation("⚠️ No hay trazos para rehacer.")
             return
@@ -296,6 +379,74 @@ class AppController:
         exporter.export_to_csv(["trazo_id", "herramienta", "x", "y", "color", "grosor", "grupo"])
 
         self.view.log_calculation(f"📤 Exportado a: {filepath}")
+
+    def import_from_csv(self):
+        """Importa trazos desde un archivo CSV exportado por `export_to_csv`."""
+        if self.is_animating:
+            self.view.log_calculation("⚠️ Espera a que termine la animación actual.")
+            return
+
+        filepath = filedialog.askopenfilename(
+            defaultextension=".csv",
+            filetypes=[("Archivos CSV", "*.csv")],
+            title="Importar coordenadas desde CSV"
+        )
+        if not filepath:
+            return
+
+        try:
+            imported_strokes = ImportData(filepath).import_from_csv()
+        except (OSError, KeyError, ValueError) as e:
+            self.view.log_calculation(f"❌ ERROR al importar CSV: {e}")
+            return
+
+        if not imported_strokes:
+            self.view.log_calculation("⚠️ El archivo CSV no contiene trazos válidos.")
+            return
+
+        if self.strokes:
+            mode = self._ask_import_mode()
+            if mode is None:
+                self.view.log_calculation("ℹ️ Importación cancelada.")
+                return
+            if mode == "replace":
+                self.strokes = []
+
+        self.strokes.extend(imported_strokes)
+        self.redo_stack.clear()
+        self.canvas_manager.redraw(self.strokes, self.grid_enabled, self.dark_mode)
+
+        total_points = sum(len(s["points"]) for s in imported_strokes)
+        self.view.log_calculation(f"📥 Importados {len(imported_strokes)} trazo(s) ({total_points} puntos) desde: {filepath}")
+
+    def _ask_import_mode(self):
+        """Pregunta si los trazos importados deben reemplazar o añadirse al lienzo actual.
+        Devuelve "replace" / "merge" / None (cancelado)."""
+        popup = tk.Toplevel(self.view)
+        popup.title("Importar CSV")
+        popup.geometry("420x180")
+        popup.resizable(False, False)
+        popup.transient(self.view)
+        popup.grab_set()
+
+        result = {"mode": None}
+
+        ttk.Label(popup, text="El lienzo ya tiene trazos.\n¿Qué deseas hacer con el CSV importado?",
+                  justify=tk.CENTER, padding=10).pack()
+
+        btn_frame = ttk.Frame(popup, padding=10)
+        btn_frame.pack(fill=tk.X)
+
+        def choose(mode):
+            result["mode"] = mode
+            popup.destroy()
+
+        ttk.Button(btn_frame, text="Reemplazar", command=lambda: choose("replace")).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+        ttk.Button(btn_frame, text="Añadir", command=lambda: choose("merge")).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+        ttk.Button(btn_frame, text="Cancelar", command=lambda: choose(None)).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+
+        self.view.wait_window(popup)
+        return result["mode"]
 
     def _record_stroke(self, points, groups=None):
         """Guarda un trazo recién dibujado en el historial (habilita deshacer/rehacer, export, etc.).
@@ -336,9 +487,33 @@ class AppController:
             self.start_x = None
             self.start_y = None
 
+    def _animate_points(self, points, on_point=None, on_complete=None):
+        """Pinta `points` uno a uno con un retraso de `self.animation_delay` ms entre cada uno.
+        Usado por draw_lines/_draw_circle_and_ellipse_detail cuando self.animation_enabled es True."""
+        self.is_animating = True
+
+        def step(i):
+            if i >= len(points):
+                self.is_animating = False
+                if on_complete:
+                    on_complete()
+                return
+
+            x, y = points[i]
+            self.canvas_manager.draw_pixel(x, y, color=self.current_color, size=self.current_thickness)
+            if on_point:
+                on_point(x, y)
+            self.view.after(self.animation_delay, lambda: step(i + 1))
+
+        step(0)
+
     def draw_lines(self, x1: int, y1: int, x2: int, y2: int):
+        if self.is_animating:
+            self.view.log_calculation("⚠️ Espera a que termine la animación actual antes de dibujar otro trazo.")
+            return
+
         points = []
-        
+
         if self.current_mode == "LINEA DDA":
             alg = DDA(x1, y1, x2, y2)
             points = alg.generate_points()
@@ -348,14 +523,22 @@ class AppController:
 
         self.view.log_calculation(f"\n⌛️ Calculando {self.current_mode}...\n")
 
-        for p in points:
-            # Ahora le pasamos el color y grosor actuales al método que pinta el pixel
-            self.canvas_manager.draw_pixel(p[0], p[1], color=self.current_color, size=self.current_thickness)
-            self.view.log_calculation(f"X: {p[0]}, Y: {p[1]}")
+        def finish():
+            self._record_stroke(points)
+            self.view.log_calculation("\n✅ Trazo finalizado\n")
 
-        self._record_stroke(points)
-
-        self.view.log_calculation("\n✅ Trazo finalizado\n")
+        if self.animation_enabled:
+            self._animate_points(
+                points,
+                on_point=lambda x, y: self.view.log_calculation(f"X: {x}, Y: {y}"),
+                on_complete=finish,
+            )
+        else:
+            for p in points:
+                # Ahora le pasamos el color y grosor actuales al método que pinta el pixel
+                self.canvas_manager.draw_pixel(p[0], p[1], color=self.current_color, size=self.current_thickness)
+                self.view.log_calculation(f"X: {p[0]}, Y: {p[1]}")
+            finish()
 
     def draw_circle(self, x_center: int, y_center: int, radius: int):
         points_dict = {}
@@ -407,6 +590,9 @@ class AppController:
 
 
     def _draw_circle_and_ellipse_detail(self, primitive_name: str, points_dict: dict) -> None:
+        if self.is_animating:
+            self.view.log_calculation("⚠️ Espera a que termine la animación actual antes de dibujar otro trazo.")
+            return
 
         group_plural = self.PRIMITIVE_INFO[primitive_name]["group_plural"]
         group_header = self.PRIMITIVE_INFO[primitive_name]["group_header"]
@@ -418,27 +604,33 @@ class AppController:
         for group_num, (_, points) in enumerate(points_dict.items(), start=1):
             group_label = f"{group_header.capitalize()} {group_num}"
             for p in points:
-                self.canvas_manager.draw_pixel(p[0], p[1], color=self.current_color, size=self.current_thickness)
                 flat_points.append(p)
                 flat_groups.append(group_label)
 
-        self._record_stroke(flat_points, flat_groups)
+        def finish():
+            self._record_stroke(flat_points, flat_groups)
+            self.view.log_calculation("\n✅ Trazo finalizado\n")
 
-        self.view.log_calculation("\n✅ Trazo finalizado\n")
+            # Crear e inyectar el botón dinámico en la caja de texto
+            self.view.log_text.config(state='normal')
 
-        # Crear e inyectar el botón dinámico en la caja de texto
-        self.view.log_text.config(state='normal')
+            btn_detalle = ttk.Button(self.view.log_text, text=f"Mostrar detalle de {group_plural}",
+                                        command=lambda: self.show_points_details(primitive_name ,points_dict))
 
-        btn_detalle = ttk.Button(self.view.log_text, text=f"Mostrar detalle de {group_plural}",
-                                    command=lambda: self.show_points_details(primitive_name ,points_dict))
-        
-        # Insertar el widget dentro del log
-        self.view.log_text.window_create(tk.END, window=btn_detalle)
-        self.view.log_text.insert(tk.END, "\n\n")
-        
-        self.view.log_text.see(tk.END)
-        self.view.log_text.config(state='disabled')
-        
+            # Insertar el widget dentro del log
+            self.view.log_text.window_create(tk.END, window=btn_detalle)
+            self.view.log_text.insert(tk.END, "\n\n")
+
+            self.view.log_text.see(tk.END)
+            self.view.log_text.config(state='disabled')
+
+        if self.animation_enabled:
+            self._animate_points(flat_points, on_complete=finish)
+        else:
+            for p in flat_points:
+                self.canvas_manager.draw_pixel(p[0], p[1], color=self.current_color, size=self.current_thickness)
+            finish()
+
 
     def confirm_exit(self, event=None):
         """Muestra un diálogo de confirmación antes de cerrar la aplicación."""

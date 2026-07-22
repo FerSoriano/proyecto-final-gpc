@@ -44,6 +44,9 @@ class MainWindow(tk.Tk):
         self.btn_export = ttk.Button(top_frame, text="Exportar CSV")
         self.btn_export.pack(side=tk.RIGHT, padx=(2, 5))
 
+        self.btn_import = ttk.Button(top_frame, text="Importar CSV")
+        self.btn_import.pack(side=tk.RIGHT, padx=(2, 5))
+
         # Separador visual vertical
         ttk.Separator(top_frame, orient='vertical').pack(side=tk.LEFT, fill=tk.Y, padx=10)
 
